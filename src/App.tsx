@@ -1,8 +1,12 @@
-import React from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import './App.scss';
+import { SignIn } from './SignIn';
+import { Home } from './Home'
+import { User } from './Model';
 
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
+import { getFirestore } from "firebase/firestore";
 
 const firebaseConfig = {
 	apiKey: process.env.REACT_APP_apiKey,
@@ -16,19 +20,13 @@ const firebaseConfig = {
 
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
+const firestore = getFirestore(app);
 
 const App = () => {
-	return (<div className='container-fluid'>
-		<div className="row">
-			<header>
-				<h1>Welcome to Mackenzie Fitness!</h1>
-			</header>
-		</div>
-		<div className='row'>
-		</div>
-		<div className='row'>
-		</div>
-	</div>);
+	const [user, setUser] = useState<User | undefined>(undefined);
+
+	if (user == undefined) return (<SignIn setUser={setUser} />);
+	else return (<Home firestore={firestore} user={user} />);
 }
 
 export default App;
