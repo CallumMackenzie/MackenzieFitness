@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import './App.scss';
+import { Button } from '@mui/material';
 import { GoogleAuthProvider, UserCredential, getAuth, signInWithPopup, User as FirebaseUser, Auth, OAuthCredential, setPersistence, browserSessionPersistence, signInWithRedirect, signInWithEmailAndPassword, signInWithEmailLink } from "firebase/auth";
 import { User } from './Model';
 
@@ -48,9 +49,9 @@ export const SignIn = (props: {
 		</div>
 		<div className='row'>
 			<div className='d-flex justify-content-center'>
-				<button className='btn btn-primary m-1' onClick={() => signInGoogle(auth, props.setUser)}>
+				<Button variant="contained" onClick={() => signInGoogle(auth, props.setUser)}>
 					Sign in with Google
-				</button>
+				</Button>
 			</div>
 		</div>
 	</div>);
