@@ -1,11 +1,8 @@
 import React, { useCallback, useEffect, useState } from "react";
 import './App.scss';
-import { BodyStats, Distance, DistanceUnit, Mass, MassUnit, TimedEntry, UnitValue, bmi } from "./Model";
+import { BodyStats, Distance, DistanceUnit, Mass, MassUnit, TimedEntry, TimedEntryData, UnitValue } from "./Model";
 import { Firestore, collection, doc, getDoc, setDoc } from "firebase/firestore";
-import {
-	User, Timeline, ffmi as calculateFFMI, bmi as calculateBMI,
-	ffmiNormalized as calculateFFMINormalized, leanMass as calculateLeanMass
-} from "./Model";
+import { User, Timeline, FitnessCalculator, Unit } from "./Model";
 import { Button, FormControl, InputLabel, MenuItem, Select, SelectChangeEvent, TextField } from "@mui/material";
 
 const BODY_STATS_COLLECTION_NAME = "body-stats";
@@ -41,22 +38,27 @@ export const Home = (props: {
 			</div>
 			{bodyStats == undefined && <div className="row spinner-border mx-auto" role="status" />}
 			{bodyStats != undefined &&
-				<BodyStatsOverview bodyStats={bodyStats!!}
+				<BodyStatsOverview
+					firestore={props.firestore}
+					user={props.user}
+					bodyStats={bodyStats!!}
 					setBodyStats={setBodyStats} />}
 		</div>
 	</>);
 }
 
 const BodyStatsOverview = (props: {
+	firestore: Firestore,
+	user: User,
 	bodyStats: BodyStats,
 	setBodyStats: (b: BodyStats | undefined) => any
 }) => {
 	const bodyStats = props.bodyStats;
-	const [weight, setWeight] = useState(bodyStats.bodyweight.latest());
+	const [weight, setWeight] = useState(Timeline.latest(bodyStats.bodyweight));
 	const [weightUnit, setWeightUnit] = useState(MassUnit.kg);
-	const [height, setHeight] = useState(bodyStats.height.latest());
+	const [height, setHeight] = useState(Timeline.latest(bodyStats.height));
 	const [heightUnit, setHeightUnit] = useState(DistanceUnit.cm);
-	const [bfPercent, setBfPercent] = useState(bodyStats.bfPercent.latest());
+	const [bfPercent, setBfPercent] = useState(Timeline.latest(bodyStats.bfPercent));
 
 	const [statsChanged, setStatsChanged] = useState(false);
 	const [ffmi, setFFMI] = useState<number | undefined>(undefined);
@@ -65,12 +67,18 @@ const BodyStatsOverview = (props: {
 	const [leanMass, setLeanMass] = useState<Mass | undefined>(undefined);
 
 	useEffect(() => {
+		setWeight(Timeline.latest(bodyStats.bodyweight));
+		setHeight(Timeline.latest(bodyStats.height));
+		setBfPercent(Timeline.latest(bodyStats.bfPercent));
+	}, [bodyStats]);
+
+	useEffect(() => {
 		if (!weight || !height || !bfPercent) {
 			setFFMI(undefined);
 			setNormFFMI(undefined);
 		} else {
-			const ffmiCalc = calculateFFMI(weight.value, height.value, bfPercent.value);
-			const normFFMICalc = calculateFFMINormalized(weight.value, height.value, bfPercent.value);
+			const ffmiCalc = FitnessCalculator.ffmi(weight.value, height.value, bfPercent.value);
+			const normFFMICalc = FitnessCalculator.ffmiNormalized(weight.value, height.value, bfPercent.value);
 			setFFMI(ffmiCalc);
 			setNormFFMI(normFFMICalc);
 		}
@@ -80,7 +88,7 @@ const BodyStatsOverview = (props: {
 		if (!weight || !height) {
 			setBMI(undefined);
 		} else {
-			const bmiCalc = calculateBMI(weight.value, height.value);
+			const bmiCalc = FitnessCalculator.bmi(weight.value, height.value);
 			setBMI(bmiCalc);
 		}
 	}, [weight, weightUnit, height, heightUnit]);
@@ -89,7 +97,7 @@ const BodyStatsOverview = (props: {
 		if (!weight || !bfPercent) {
 			setLeanMass(undefined);
 		} else {
-			const leanMassCalc = calculateLeanMass(weight.value, bfPercent.value);
+			const leanMassCalc = FitnessCalculator.leanMass(weight.value, bfPercent.value);
 			setLeanMass(leanMassCalc);
 		}
 	}, [weight, weightUnit, bfPercent]);
@@ -99,20 +107,22 @@ const BodyStatsOverview = (props: {
 			<h2>Body Statistics</h2>
 		</div>
 		<WeightView
+			bodyStats={bodyStats}
 			setStatsChanged={setStatsChanged}
 			weight={weight}
 			setWeight={setWeight}
 			weightUnit={weightUnit}
 			setWeightUnit={setWeightUnit}
-			bodyStats={bodyStats}
 			setBodyStats={props.setBodyStats} />
 		<HeightView
+		bodyStats={bodyStats}
 			setStatsChanged={setStatsChanged}
 			height={height}
 			setHeight={setHeight}
 			heightUnit={heightUnit}
 			setHeightUnit={setHeightUnit} />
 		<BodyFatView
+			bodyStats={bodyStats}
 			setStatsChanged={setStatsChanged}
 			setBfPercent={setBfPercent} />
 		<div className="row m-1">
@@ -121,13 +131,25 @@ const BodyStatsOverview = (props: {
 		</div>
 		<div className="row m-1">
 			<p className="col">BMI: {bmi?.toFixed(2) ?? "NA"}</p>
-			<p className="col">Lean Mass: {leanMass?.to(weightUnit).toString() ?? "NA"}</p>
+			<p className="col">Lean Mass: {leanMass
+				? UnitValue.toString(UnitValue.to(leanMass, weightUnit))
+				: "NA"}</p>
 		</div>
 		<div className="row mx-auto">
 			<Button className="col"
 				variant="contained"
 				disabled={!statsChanged}
 				onClick={() => {
+					const nbs = new BodyStats(props.bodyStats as any);
+					if (bfPercent)
+						Timeline.add(nbs.bfPercent, bfPercent);
+					if (weight)
+						Timeline.add(nbs.bodyweight, weight);
+					if (height)
+						Timeline.add(nbs.height, height);
+					props.setBodyStats(nbs);
+					saveBodyStats(props.firestore, props.user, nbs)
+						.then(() => console.log("Saved"));
 				}}>
 				{statsChanged ? "Save" : "No Changes"}
 			</Button>
@@ -137,7 +159,8 @@ const BodyStatsOverview = (props: {
 
 const BodyFatView = (props: {
 	setStatsChanged: (n: boolean) => any,
-	setBfPercent: (n: TimedEntry<number> | undefined) => any
+	bodyStats: BodyStats,
+	setBfPercent: (n: TimedEntryData<number> | undefined) => any
 }) => {
 	const onBfFieldChange: React.ChangeEventHandler<HTMLInputElement> = v => {
 		if (!v.target.value) {
@@ -154,26 +177,26 @@ const BodyFatView = (props: {
 		<TextField className="col"
 			label="Body Fat Percentage"
 			type="number"
+			defaultValue={Timeline.latest(props.bodyStats.bfPercent)?.value ?? ""}
 			onChange={onBfFieldChange} />
 	</div>);
 }
 
 const WeightView = (props: {
 	setStatsChanged: (n: boolean) => any,
-	weight: TimedEntry<Mass> | undefined,
-	setWeight: (w: TimedEntry<Mass> | undefined) => any,
-	weightUnit: MassUnit,
-	setWeightUnit: (u: MassUnit) => any,
+	weight: TimedEntryData<Mass> | undefined,
+	setWeight: (w: TimedEntryData<Mass> | undefined) => any,
+	weightUnit: Unit,
+	setWeightUnit: (u: Unit) => any,
 	bodyStats: BodyStats,
 	setBodyStats: (b: BodyStats) => any,
 }) => {
-
 	const onWeightFieldChange: React.ChangeEventHandler<HTMLInputElement> = v => {
 		if (!v.target.value) {
 			props.setWeight(undefined);
 		} else {
 			const value = parseFloat(v.target.value);
-			const entry = TimedEntry.now(new Mass(props.weightUnit, value));
+			const entry = TimedEntry.now({ unit: props.weightUnit, value });
 			props.setWeight(entry);
 			props.setStatsChanged(true);
 		}
@@ -184,7 +207,7 @@ const WeightView = (props: {
 			const newWeightUnit = MassUnit[v.target.value as keyof typeof MassUnit];
 			props.setWeightUnit(newWeightUnit);
 			if (props.weight) {
-				props.setWeight(TimedEntry.now(new Mass(newWeightUnit, props.weight?.value.value)));
+				props.setWeight(TimedEntry.now({ unit: newWeightUnit, value: props.weight?.value.value }));
 			}
 		};
 
@@ -192,6 +215,7 @@ const WeightView = (props: {
 		<TextField className="col"
 			label="Weight"
 			type="number"
+			defaultValue={Timeline.latest(props.bodyStats.bodyweight)?.value.value ?? ""}
 			onChange={onWeightFieldChange} />
 		<FormControl className="col">
 			<InputLabel id="weight-unit-select-label">Unit</InputLabel>
@@ -207,18 +231,19 @@ const WeightView = (props: {
 }
 
 const HeightView = (props: {
+	bodyStats: BodyStats,
 	setStatsChanged: (n: boolean) => any,
-	height: TimedEntry<Distance> | undefined,
-	setHeight: (h: TimedEntry<Distance> | undefined) => any,
-	heightUnit: DistanceUnit,
-	setHeightUnit: (d: DistanceUnit) => any
+	height: TimedEntryData<Distance> | undefined,
+	setHeight: (h: TimedEntryData<Distance> | undefined) => any,
+	heightUnit: Unit,
+	setHeightUnit: (d: Unit) => any
 }) => {
 	const onHeightFieldChange: React.ChangeEventHandler<HTMLInputElement> = v => {
 		if (!v.target.value) {
 			props.setHeight(undefined);
 		} else {
 			const value = parseFloat(v.target.value);
-			const entry = TimedEntry.now(new Distance(props.heightUnit, value));
+			const entry = TimedEntry.now({ unit: props.heightUnit, value });
 			props.setHeight(entry);
 			props.setStatsChanged(true);
 		}
@@ -229,7 +254,7 @@ const HeightView = (props: {
 			const newHeightUnit = DistanceUnit[v.target.value as keyof typeof DistanceUnit];
 			props.setHeightUnit(newHeightUnit);
 			if (props.height) {
-				props.setHeight(TimedEntry.now(new Distance(newHeightUnit, props.height.value.value)));
+				props.setHeight(TimedEntry.now({ unit: newHeightUnit, value: props.height.value.value }));
 			}
 		};
 
@@ -237,6 +262,7 @@ const HeightView = (props: {
 		<TextField className="col"
 			label="Height"
 			type="number"
+			defaultValue={Timeline.latest(props.bodyStats.height)?.value.value ?? ""}
 			onChange={onHeightFieldChange} />
 		<FormControl className="col">
 			<InputLabel id="height-unit-select-label">Unit</InputLabel>
@@ -256,19 +282,14 @@ const fetchBodyStats = async (firestore: Firestore, user: User): Promise<BodySta
 	const docSnap = await getDoc(docRef);
 	if (docSnap.exists()) {
 		let data = docSnap.data();
-		return {
-			birthDate: data['birthDate'] ?? null,
-			bfPercent: new Timeline(data['bfPercent']?.values ?? []),
-			bodyweight: new Timeline(data['bodyweight']?.values ?? []),
-			height: new Timeline(data['height']?.values ?? [])
-		};
+		return new BodyStats(data);
 	}
 	else return createUserBodyStats(firestore, user);
 }
 
 const saveBodyStats = async (firestore: Firestore, user: User, bodyStats: BodyStats): Promise<void> => {
 	const bodyStatsRef = collection(firestore, BODY_STATS_COLLECTION_NAME);
-	await setDoc(doc(bodyStatsRef, user.user.uid), JSON.parse(JSON.stringify(bodyStats)));
+	return await setDoc(doc(bodyStatsRef, user.user.uid), JSON.parse(JSON.stringify(bodyStats)));
 }
 
 const createUserBodyStats = async (firestore: Firestore, user: User): Promise<BodyStats> => {
