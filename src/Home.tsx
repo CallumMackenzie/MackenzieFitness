@@ -4,33 +4,18 @@ import { BodyStats, Distance, DistanceUnit, Mass, MassUnit, TimedEntry, UnitValu
 import { Firestore, collection, doc, getDoc, setDoc } from "firebase/firestore";
 import {
 	User, Timeline, ffmi as calculateFFMI, bmi as calculateBMI,
-	ffmiNormalized as calculateFFMINormalized
+	ffmiNormalized as calculateFFMINormalized, leanMass as calculateLeanMass
 } from "./Model";
-import { Button, FormControl, IconButton, InputLabel, MenuItem, Select, SelectChangeEvent, TextField } from "@mui/material";
-import AddIcon from "@mui/icons-material/Add";
-import moment from "moment";
+import { Button, FormControl, InputLabel, MenuItem, Select, SelectChangeEvent, TextField } from "@mui/material";
 
 const BODY_STATS_COLLECTION_NAME = "body-stats";
 
-const PlusButton = (props: any) => {
-	return (<>
-		<div {...props}>
-			<IconButton aria-label="add" >
-				<AddIcon />
-			</IconButton>
-		</div>
-	</>);
-};
 
 export const Home = (props: {
 	firestore: Firestore,
 	user: User
 }) => {
 	const [bodyStats, setBodyStats] = useState<BodyStats | undefined>(undefined);
-
-	useEffect(() => {
-		if (bodyStats) saveBodyStats(props.firestore, props.user, bodyStats);
-	}, [bodyStats]);
 
 	useEffect(() => {
 		setBodyStats(undefined);
@@ -48,7 +33,9 @@ export const Home = (props: {
 		<div className="container d-">
 			<div className="d-flex m-2">
 				<h2 className="mx-auto">Welcome {props.user.user.displayName}!</h2>
-				<Button className="col-2" variant="contained" onClick={() => props.user.signOut()}>
+				<Button className="col-2"
+					variant="contained"
+					onClick={() => props.user.signOut()}>
 					Sign Out
 				</Button>
 			</div>
@@ -62,29 +49,20 @@ export const Home = (props: {
 
 const BodyStatsOverview = (props: {
 	bodyStats: BodyStats,
-	setBodyStats: (b: BodyStats) => any
+	setBodyStats: (b: BodyStats | undefined) => any
 }) => {
 	const bodyStats = props.bodyStats;
 	const [weight, setWeight] = useState(bodyStats.bodyweight.latest());
 	const [weightUnit, setWeightUnit] = useState(MassUnit.kg);
-
 	const [height, setHeight] = useState(bodyStats.height.latest());
 	const [heightUnit, setHeightUnit] = useState(DistanceUnit.cm);
 	const [bfPercent, setBfPercent] = useState(bodyStats.bfPercent.latest());
-	const [ffmi, setFFMI] = useState<TimedEntry<number> | undefined>(undefined);
-	const [normFFMI, setNormFFMI] = useState<TimedEntry<number> | undefined>(undefined);
-	const [bmi, setBMI] = useState<TimedEntry<number> | undefined>(undefined);
 
-	// useEffect(() => {
-	// 	setHeight(bodyStats.height.latest());
-	// 	setWeight(bodyStats.bodyweight.latest());
-	// 	setBfPercent(bodyStats.bfPercent.latest());
-
-	// 	const latestHeight = bodyStats.height.latest();
-	// 	if (latestHeight) setHeightUnit(latestHeight.value.unit);
-	// 	const latestWeight = bodyStats.bodyweight.latest();
-	// 	if (latestWeight) setWeightUnit(latestWeight.value.unit);
-	// }, [bodyStats]);
+	const [statsChanged, setStatsChanged] = useState(false);
+	const [ffmi, setFFMI] = useState<number | undefined>(undefined);
+	const [normFFMI, setNormFFMI] = useState<number | undefined>(undefined);
+	const [bmi, setBMI] = useState<number | undefined>(undefined);
+	const [leanMass, setLeanMass] = useState<Mass | undefined>(undefined);
 
 	useEffect(() => {
 		if (!weight || !height || !bfPercent) {
@@ -93,8 +71,8 @@ const BodyStatsOverview = (props: {
 		} else {
 			const ffmiCalc = calculateFFMI(weight.value, height.value, bfPercent.value);
 			const normFFMICalc = calculateFFMINormalized(weight.value, height.value, bfPercent.value);
-			setFFMI(TimedEntry.now(ffmiCalc));
-			setNormFFMI(TimedEntry.now(normFFMICalc));
+			setFFMI(ffmiCalc);
+			setNormFFMI(normFFMICalc);
 		}
 	}, [weight, weightUnit, height, heightUnit, bfPercent]);
 
@@ -103,15 +81,25 @@ const BodyStatsOverview = (props: {
 			setBMI(undefined);
 		} else {
 			const bmiCalc = calculateBMI(weight.value, height.value);
-			setBMI(TimedEntry.now(bmiCalc));
+			setBMI(bmiCalc);
 		}
 	}, [weight, weightUnit, height, heightUnit]);
+
+	useEffect(() => {
+		if (!weight || !bfPercent) {
+			setLeanMass(undefined);
+		} else {
+			const leanMassCalc = calculateLeanMass(weight.value, bfPercent.value);
+			setLeanMass(leanMassCalc);
+		}
+	}, [weight, weightUnit, bfPercent]);
 
 	return (<>
 		<div className="row">
 			<h2>Body Statistics</h2>
 		</div>
 		<WeightView
+			setStatsChanged={setStatsChanged}
 			weight={weight}
 			setWeight={setWeight}
 			weightUnit={weightUnit}
@@ -119,28 +107,43 @@ const BodyStatsOverview = (props: {
 			bodyStats={bodyStats}
 			setBodyStats={props.setBodyStats} />
 		<HeightView
+			setStatsChanged={setStatsChanged}
 			height={height}
 			setHeight={setHeight}
 			heightUnit={heightUnit}
 			setHeightUnit={setHeightUnit} />
-		<BodyFatView setBfPercent={setBfPercent} />
+		<BodyFatView
+			setStatsChanged={setStatsChanged}
+			setBfPercent={setBfPercent} />
 		<div className="row m-1">
-			<p className="col">Calculated FFMI: {ffmi?.value.toFixed(2) ?? "N/A"}</p>
-			<p className="col">Normalized FFMI: {normFFMI?.value.toFixed(2) ?? "NA"}</p>
+			<p className="col">FFMI: {ffmi?.toFixed(2) ?? "NA"}</p>
+			<p className="col">Normalized FFMI: {normFFMI?.toFixed(2) ?? "NA"}</p>
 		</div>
 		<div className="row m-1">
-			<p className="col">Calculated BMI: {bmi?.value.toFixed(2) ?? "N/A"}</p>
+			<p className="col">BMI: {bmi?.toFixed(2) ?? "NA"}</p>
+			<p className="col">Lean Mass: {leanMass?.to(weightUnit).toString() ?? "NA"}</p>
+		</div>
+		<div className="row mx-auto">
+			<Button className="col"
+				variant="contained"
+				disabled={!statsChanged}
+				onClick={() => {
+				}}>
+				{statsChanged ? "Save" : "No Changes"}
+			</Button>
 		</div>
 	</>);
 }
 
 const BodyFatView = (props: {
+	setStatsChanged: (n: boolean) => any,
 	setBfPercent: (n: TimedEntry<number> | undefined) => any
 }) => {
 	const onBfFieldChange: React.ChangeEventHandler<HTMLInputElement> = v => {
 		if (!v.target.value) {
 			props.setBfPercent(undefined);
 		} else {
+			props.setStatsChanged(true);
 			const value = parseFloat(v.target.value);
 			const entry = TimedEntry.now(value);
 			props.setBfPercent(entry);
@@ -152,11 +155,11 @@ const BodyFatView = (props: {
 			label="Body Fat Percentage"
 			type="number"
 			onChange={onBfFieldChange} />
-		<PlusButton className="col-1" />
 	</div>);
 }
 
 const WeightView = (props: {
+	setStatsChanged: (n: boolean) => any,
 	weight: TimedEntry<Mass> | undefined,
 	setWeight: (w: TimedEntry<Mass> | undefined) => any,
 	weightUnit: MassUnit,
@@ -170,8 +173,9 @@ const WeightView = (props: {
 			props.setWeight(undefined);
 		} else {
 			const value = parseFloat(v.target.value);
-			const entry = TimedEntry.now(new UnitValue(props.weightUnit, value));
+			const entry = TimedEntry.now(new Mass(props.weightUnit, value));
 			props.setWeight(entry);
+			props.setStatsChanged(true);
 		}
 	};
 
@@ -180,17 +184,9 @@ const WeightView = (props: {
 			const newWeightUnit = MassUnit[v.target.value as keyof typeof MassUnit];
 			props.setWeightUnit(newWeightUnit);
 			if (props.weight) {
-				props.setWeight(TimedEntry.now(new UnitValue(newWeightUnit, props.weight?.value.value)));
+				props.setWeight(TimedEntry.now(new Mass(newWeightUnit, props.weight?.value.value)));
 			}
 		};
-
-	const saveWeight = () => {
-		if (props.weight) {
-			const nbs = new BodyStats(props.bodyStats);
-			nbs.bodyweight.add(props.weight);
-			props.setBodyStats(nbs);
-		}
-	};
 
 	return (<div className="row m-2">
 		<TextField className="col"
@@ -207,16 +203,11 @@ const WeightView = (props: {
 				<MenuItem value={"kg"}>kg</MenuItem>
 			</Select>
 		</FormControl>
-		<Button className="col-3 mx-2"
-			variant="contained"
-			disabled={props.weight == undefined}
-			onClick={saveWeight}>
-			Save
-		</Button>
 	</div>);
 }
 
 const HeightView = (props: {
+	setStatsChanged: (n: boolean) => any,
 	height: TimedEntry<Distance> | undefined,
 	setHeight: (h: TimedEntry<Distance> | undefined) => any,
 	heightUnit: DistanceUnit,
@@ -227,18 +218,18 @@ const HeightView = (props: {
 			props.setHeight(undefined);
 		} else {
 			const value = parseFloat(v.target.value);
-			const entry = TimedEntry.now(new UnitValue(props.heightUnit, value));
+			const entry = TimedEntry.now(new Distance(props.heightUnit, value));
 			props.setHeight(entry);
+			props.setStatsChanged(true);
 		}
 	};
-
 
 	const onHeightUnitChange: ((event: SelectChangeEvent<string>, child: React.ReactNode) => void) =
 		v => {
 			const newHeightUnit = DistanceUnit[v.target.value as keyof typeof DistanceUnit];
 			props.setHeightUnit(newHeightUnit);
 			if (props.height) {
-				props.setHeight(TimedEntry.now(new UnitValue(newHeightUnit, props.height.value.value)));
+				props.setHeight(TimedEntry.now(new Distance(newHeightUnit, props.height.value.value)));
 			}
 		};
 
@@ -257,7 +248,6 @@ const HeightView = (props: {
 				<MenuItem value={"m"}>m</MenuItem>
 			</Select>
 		</FormControl>
-		<PlusButton className="col-1" />
 	</div>);
 }
 

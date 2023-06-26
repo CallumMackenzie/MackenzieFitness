@@ -111,33 +111,43 @@ export class Timeline<V> {
 }
 
 export class Unit {
-	convert: number;
-	protected constructor(convert: number) {
+	readonly convert: number;
+	readonly fullName: string;
+	readonly shortName: string;
+	protected constructor(fullName: string, shortName: string, convert: number) {
 		this.convert = convert;
+		this.fullName = fullName;
+		this.shortName = shortName;
+	}
+
+	toString(): string {
+		return this.shortName;
 	}
 }
 
 export class MassUnit extends Unit {
-	static kg = new MassUnit(1);
-	static lbs = new MassUnit(1 / 2.20462);
+	static kg = new MassUnit("kilograms", "kg", 1);
+	static lbs = new MassUnit("pounds", "lbs", 1 / 2.20462);
 
-	private constructor(convert: number) {
-		super(convert);
+	private constructor(fullName: string,
+		shortName: string,
+		convert: number) {
+		super(fullName, shortName, convert);
 	}
 }
 
 export class DistanceUnit extends Unit {
-	static cm = new DistanceUnit(1);
-	static m = new DistanceUnit(100);
-	static in = new DistanceUnit(2.54);
-	static feet = new DistanceUnit(30.48);
+	static cm = new DistanceUnit("centimeters", "cm", 1);
+	static m = new DistanceUnit("meters", "m", 100);
+	static in = new DistanceUnit("inches", "in", 2.54);
+	static feet = new DistanceUnit("feet", "ft", 30.48);
 
-	private constructor(c: number) {
-		super(c);
+	private constructor(fn: string, sn: string, c: number) {
+		super(fn, sn, c);
 	}
 }
 
-export class UnitValue<U extends Unit> {
+export abstract class UnitValue<S extends UnitValue<S, U>, U extends Unit> {
 	readonly unit: U;
 	readonly value: number;
 
@@ -146,55 +156,92 @@ export class UnitValue<U extends Unit> {
 		this.value = value;
 	}
 
+	equals(other: S): boolean {
+		const o = other.to(this.unit);
+		return this.value - o.value< 0.001;
+	}
+
 	toString(): string {
-		return this.value + "";
+		return this.value.toFixed(2) + " " + this.unit;
 	}
 
-	to(other: U): UnitValue<U> {
-		return new UnitValue(other, this.value * this.unit.convert / other.convert);
+	abstract new(unit: U, value: number): S;
+
+	to(other: U): S {
+		return this.new(other, this.value * this.unit.convert / other.convert);
 	}
 
-	add(other: UnitValue<U>): UnitValue<U> {
-		return new UnitValue(this.unit, this.value + other.to(this.unit).value);
+	add(other: S): S {
+		return this.new(this.unit, this.value + other.to(this.unit).value);
 	}
 
-	sub(other: UnitValue<U>): UnitValue<U> {
-		return new UnitValue(this.unit, this.value - other.to(this.unit).value);
+	sub(other: S): S {
+		return this.new(this.unit, this.value - other.to(this.unit).value);
 	}
 
-	mult(other: UnitValue<U>): UnitValue<U> {
-		return new UnitValue(this.unit, this.value * other.to(this.unit).value);
+	mult(other: S): S {
+		return this.new(this.unit, this.value * other.to(this.unit).value);
 	}
 
-	div(other: UnitValue<U>): UnitValue<U> {
-		return new UnitValue(this.unit, this.value * other.to(this.unit).value);
+	div(other: S): S {
+		return this.new(this.unit, this.value * other.to(this.unit).value);
 	}
 }
 
-export type Mass = UnitValue<MassUnit>;
-export type Distance = UnitValue<DistanceUnit>;
+
+export class Mass extends UnitValue<Mass, MassUnit> {
+	constructor(u: MassUnit, n: number) {
+		super(u, n);
+	}
+
+	new: (u: MassUnit, n: number) => Mass = (u, n) => new Mass(u, n);
+
+	kg(): Mass { return this.to(MassUnit.kg); }
+
+	lbs(): Mass { return this.to(MassUnit.lbs); }
+
+	static kg(n: number): Mass { return new Mass(MassUnit.kg, n) };
+}
+
+export class Distance extends UnitValue<Distance, DistanceUnit> {
+	constructor(u: DistanceUnit, n: number) {
+		super(u, n);
+	}
+
+	m(): Distance { return this.to(DistanceUnit.m); }
+
+	new: (u: DistanceUnit, n: number) => Distance = (u, n) => new Distance(u, n);
+}
 
 export const ffmi = (bodyweight: Mass, height: Distance, bodyFatPercent: number): number => {
-	const bw = bodyweight.to(MassUnit.kg).value;
-	const h = height.to(DistanceUnit.m).value;
-	const totalBodyFat = bw * bodyFatPercent / 100;
-	const leanMass = bw * (1 - bodyFatPercent / 100);
-	const ffmi = (leanMass / 2.2) * 2.20462 / (h * h);
+	const h = height.m().value;
+	const leanMassKg = leanMass(bodyweight, bodyFatPercent).kg().value;
+	const ffmi = (leanMassKg / 2.2) * 2.20462 / (h * h);
 	return ffmi;
 }
 
 export const ffmiNormalized = (bodyweight: Mass, height: Distance, bodyFatPercent: number): number => {
-	let h = height.to(DistanceUnit.m).value;
+	let h = height.m().value;
 	const _ffmi = ffmi(bodyweight, height, bodyFatPercent);
 	const ffmiNormalized = _ffmi + (6.1 * (1.8 - h));
 	return ffmiNormalized;
 }
 
 export const bmi = (bodyweight: Mass, height: Distance): number => {
-	const bw = bodyweight.to(MassUnit.kg).value;
-	const h = height.to(DistanceUnit.m).value;
+	const bw = bodyweight.kg().value;
+	const h = height.m().value;
 	const bmi = bw / (h * h);
 	return bmi;
 }
 
+export const leanMass = (bodyweight: Mass, bfPercent: number): Mass => {
+	const bwKg = bodyweight.kg().value;
+	const leanMass = bwKg * (1 - bfPercent / 100);
+	return Mass.kg(leanMass);
+}
 
+export const fatMass = (bodyweight: Mass, bfPercent: number): Mass => {
+	const bwKg = bodyweight.kg().value;
+	const fatMass = bwKg * bfPercent / 100;
+	return Mass.kg(fatMass);
+}
