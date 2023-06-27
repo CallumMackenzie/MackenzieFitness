@@ -8,6 +8,8 @@ import { Button, FormControl, InputLabel, MenuItem, Select, SelectChangeEvent, T
 import { Auth, User } from "firebase/auth";
 import { useNavigate } from "react-router-dom";
 import { useSignIn } from "./model/Account";
+import IconButton from '@mui/material/IconButton';
+import ShowChart from "@mui/icons-material/ShowChart";
 
 const BODY_STATS_COLLECTION_NAME = "body-stats";
 
@@ -145,17 +147,17 @@ const BodyStatsOverview = (props: {
 			bodyStats={bodyStats}
 			setStatsChanged={setStatsChanged}
 			setBfPercent={setBfPercent} />
-		<div className="row m-1">
-			<p className="col">FFMI: {ffmi?.toFixed(2) ?? "NA"}</p>
+		<div className="row m-1 text-left">
+			<p className="col-4">FFMI: {ffmi?.toFixed(2) ?? "NA"}</p>
 			<p className="col">Normalized FFMI: {normFFMI?.toFixed(2) ?? "NA"}</p>
 		</div>
-		<div className="row m-1">
-			<p className="col">BMI: {bmi?.toFixed(2) ?? "NA"}</p>
+		<div className="row m-1 text-left">
+			<p className="col-4">BMI: {bmi?.toFixed(2) ?? "NA"}</p>
 			<p className="col">Lean Mass: {leanMass
 				? UnitValue.toString(UnitValue.to(leanMass, weightUnit))
 				: "NA"}</p>
 		</div>
-		<div className="row mx-auto">
+		<div className="row mx-auto my-1">
 			<Button className="col"
 				variant="contained"
 				disabled={!statsChanged}
@@ -172,6 +174,11 @@ const BodyStatsOverview = (props: {
 						.then(() => console.log("Saved"));
 				}}>
 				{statsChanged ? "Save" : "No Changes"}
+			</Button>
+		</div>
+		<div className="row mx-auto my-1">
+			<Button className="col" variant="contained" >
+				Body Stats Graphs
 			</Button>
 		</div>
 	</>);
@@ -193,8 +200,8 @@ const BodyFatView = (props: {
 		}
 	};
 
-	return (<div className="row m-2">
-		<TextField className="col"
+	return (<div className="row my-2">
+		<TextField className="col mx-1"
 			label="Body Fat Percentage"
 			type="number"
 			defaultValue={Timeline.latest(props.bodyStats.bfPercent)?.value ?? ""}
@@ -231,13 +238,13 @@ const WeightView = (props: {
 			}
 		};
 
-	return (<div className="row m-2">
-		<TextField className="col"
+	return (<div className="row my-2">
+		<TextField className="col mx-1"
 			label="Weight"
 			type="number"
 			defaultValue={Timeline.latest(props.bodyStats.bodyweight)?.value.value ?? ""}
 			onChange={onWeightFieldChange} />
-		<FormControl className="col">
+		<FormControl className="col mx-1">
 			<InputLabel id="weight-unit-select-label">Unit</InputLabel>
 			<Select label="Unit"
 				labelId="weight-unit-select-label"
@@ -278,13 +285,13 @@ const HeightView = (props: {
 			}
 		};
 
-	return (<div className="row m-2">
-		<TextField className="col"
+	return (<div className="row my-2">
+		<TextField className="col mx-1"
 			label="Height"
 			type="number"
 			defaultValue={Timeline.latest(props.bodyStats.height)?.value.value ?? ""}
 			onChange={onHeightFieldChange} />
-		<FormControl className="col">
+		<FormControl className="col mx-1">
 			<InputLabel id="height-unit-select-label">Unit</InputLabel>
 			<Select label="Unit"
 				labelId="height-unit-select-label"
