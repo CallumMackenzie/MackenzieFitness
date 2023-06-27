@@ -1,23 +1,5 @@
 
-import { Auth, User as FirebaseUser } from "firebase/auth";
 import moment from "moment";
-
-export class User {
-	user: FirebaseUser;
-	auth: Auth;
-	setUser: (user: User | undefined) => any;
-
-	constructor(auth: Auth, user: FirebaseUser, setUser: (user: User | undefined) => any) {
-		this.user = user;
-		this.auth = auth;
-		this.setUser = setUser;
-	}
-
-	signOut() {
-		this.auth.signOut();
-		this.setUser(undefined);
-	}
-}
 
 export class BodyStats {
 	birthDate: number | null;

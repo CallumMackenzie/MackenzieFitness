@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
-import { SignIn } from './SignIn';
+import { SignIn } from './pages/SignIn';
 import { Home } from './Home'
-import { User } from './model/Model';
 
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
 import { getFirestore } from "firebase/firestore";
+import { BrowserRouter, Outlet, Route, Routes } from 'react-router-dom';
+import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
 	apiKey: process.env.REACT_APP_apiKey,
@@ -20,12 +21,19 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 const analytics = getAnalytics(app);
 const firestore = getFirestore(app);
+const auth = getAuth();
 
 const App = () => {
-	const [user, setUser] = useState<User | undefined>(undefined);
-
-	if (user == undefined) return (<SignIn setUser={setUser} />);
-	else return (<Home firestore={firestore} user={user} />);
+	return (<>
+		<BrowserRouter>
+			<Routes>
+				<Route path="/" >
+					<Route index element={<SignIn auth={auth} />} />
+					<Route path="home" element={<Home firestore={firestore} auth={auth} />} />
+				</Route>
+			</Routes>
+		</BrowserRouter >
+	</>);
 }
 
 export default App;

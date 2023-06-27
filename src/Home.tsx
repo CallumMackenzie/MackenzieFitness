@@ -1,52 +1,70 @@
 import React, { useEffect, useState } from "react";
 import {
-	User, Timeline, FitnessCalculator, Unit,
+	Timeline, FitnessCalculator, Unit,
 	BodyStats, Distance, DistanceUnit, Mass, MassUnit, TimedEntry, TimedEntryData, UnitValue
 } from "./model/Model";
 import { Firestore, collection, doc, getDoc, setDoc } from "firebase/firestore";
 import { Button, FormControl, InputLabel, MenuItem, Select, SelectChangeEvent, TextField } from "@mui/material";
+import { Auth, User } from "firebase/auth";
+import { useNavigate } from "react-router-dom";
+import { useSignIn } from "./model/Account";
 
 const BODY_STATS_COLLECTION_NAME = "body-stats";
 
 export const Home = (props: {
-	firestore: Firestore,
-	user: User
+	auth: Auth,
+	firestore: Firestore
 }) => {
+	const navigate = useNavigate();
+
+	const foundUser = useSignIn(props.auth);
+	const [user, setUser] = useState(props.auth.currentUser);
 	const [bodyStats, setBodyStats] = useState<BodyStats | undefined>(undefined);
 
 	useEffect(() => {
 		setBodyStats(undefined);
-		fetchBodyStats(props.firestore, props.user)
-			.then((result) => {
-				setBodyStats(result);
-			}).catch(e => {
-				setBodyStats(undefined);
-				console.error(e.message);
-				props.user.signOut();
-			});
+		if (user)
+			fetchBodyStats(props.firestore, user)
+				.then((result) => {
+					setBodyStats(result);
+				}).catch(e => {
+					setBodyStats(undefined);
+					console.error(e.message);
+					props.auth.signOut();
+					navigate("/");
+				});
 	}, []);
 
-	return (<>
-		<div className="container d-">
-			<div className="d-flex m-2">
-				<h2 className="mx-auto">Welcome {props.user.user.displayName}!</h2>
-				<Button className="col-2"
-					variant="contained"
-					onClick={() => props.user.signOut()}>
-					Sign Out
-				</Button>
+	useEffect(() => {
+		if (foundUser === false) navigate("/");
+		else if (foundUser === true) setUser(props.auth.currentUser);
+	}, [foundUser]);
+
+	if (!user) {
+		navigate("/");
+		return (<></>);
+	} else
+		return (<>
+			<div className="container d-">
+				<div className="d-flex m-2">
+					<h2 className="mx-auto">Welcome {user.displayName}!</h2>
+					<Button className="col-2"
+						variant="contained"
+						onClick={() => props.auth.signOut()}>
+						Sign Out
+					</Button>
+				</div>
+				{bodyStats == undefined && <div className="row mx-auto m-1">
+					<div className="row spinner-border mx-auto" role="status" />
+				</div>}
+				{bodyStats != undefined &&
+					<BodyStatsOverview
+						firestore={props.firestore}
+						user={user}
+						bodyStats={bodyStats!!}
+						setBodyStats={setBodyStats} />}
 			</div>
-			{bodyStats == undefined && <div className="row mx-auto m-1">
-				<div className="row spinner-border mx-auto" role="status" />
-			</div>}
-			{bodyStats != undefined &&
-				<BodyStatsOverview
-					firestore={props.firestore}
-					user={props.user}
-					bodyStats={bodyStats!!}
-					setBodyStats={setBodyStats} />}
-		</div>
-	</>);
+		</>);
 }
 
 const BodyStatsOverview = (props: {
@@ -280,7 +298,7 @@ const HeightView = (props: {
 }
 
 const fetchBodyStats = async (firestore: Firestore, user: User): Promise<BodyStats> => {
-	const docRef = doc(firestore, "body-stats", user.user.uid);
+	const docRef = doc(firestore, "body-stats", user.uid);
 	const docSnap = await getDoc(docRef);
 	if (docSnap.exists()) {
 		let data = docSnap.data();
@@ -291,7 +309,7 @@ const fetchBodyStats = async (firestore: Firestore, user: User): Promise<BodySta
 
 const saveBodyStats = async (firestore: Firestore, user: User, bodyStats: BodyStats): Promise<void> => {
 	const bodyStatsRef = collection(firestore, BODY_STATS_COLLECTION_NAME);
-	return await setDoc(doc(bodyStatsRef, user.user.uid), JSON.parse(JSON.stringify(bodyStats)));
+	return await setDoc(doc(bodyStatsRef, user.uid), JSON.parse(JSON.stringify(bodyStats)));
 }
 
 const createUserBodyStats = async (firestore: Firestore, user: User): Promise<BodyStats> => {
