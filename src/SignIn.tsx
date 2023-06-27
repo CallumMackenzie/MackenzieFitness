@@ -1,8 +1,7 @@
-import React, { useEffect } from 'react';
-import './App.scss';
+import React, { useState } from 'react';
 import { Button } from '@mui/material';
-import { GoogleAuthProvider, UserCredential, getAuth, signInWithPopup, User as FirebaseUser, Auth, OAuthCredential, setPersistence, browserSessionPersistence, signInWithRedirect, signInWithEmailAndPassword, signInWithEmailLink } from "firebase/auth";
-import { User } from './Model';
+import { GoogleAuthProvider, UserCredential, getAuth, signInWithPopup, Auth, OAuthCredential } from "firebase/auth";
+import { User } from './model/Model';
 
 const googleAuthProvider = new GoogleAuthProvider();
 
@@ -34,22 +33,25 @@ const signInGoogle = (auth: Auth, setUser: (set: User | undefined) => any) =>
 export const SignIn = (props: {
 	setUser: (user: User | undefined) => any
 }) => {
+	const [foundUser, setFoundUser] = useState<boolean | undefined>(undefined);
+
 	const auth = getAuth();
 	auth.onAuthStateChanged(user => {
-		if (user) {
+		if (user)
 			props.setUser(new User(auth, user, props.setUser));
-		}
+		else
+			setFoundUser(false);
 	});
 
 	return (<div className='container-fluid'>
 		<div className="row">
-			<header className='mx-auto'>
-				<h1 className='m-2'>Welcome to Mackenzie Fitness!</h1>
-			</header>
+			<h1 className='col mx-auto text-center'>Welcome to Mackenzie Fitness!</h1>
 		</div>
 		<div className='row'>
 			<div className='d-flex justify-content-center'>
-				<Button variant="contained" onClick={() => signInGoogle(auth, props.setUser)}>
+				<Button variant="contained"
+					disabled={foundUser ?? true}
+					onClick={() => signInGoogle(auth, props.setUser)}>
 					Sign in with Google
 				</Button>
 			</div>

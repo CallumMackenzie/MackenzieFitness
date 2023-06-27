@@ -1,12 +1,12 @@
-import React, { useCallback, useEffect, useState } from "react";
-import './App.scss';
-import { BodyStats, Distance, DistanceUnit, Mass, MassUnit, TimedEntry, TimedEntryData, UnitValue } from "./Model";
+import React, { useEffect, useState } from "react";
+import {
+	User, Timeline, FitnessCalculator, Unit,
+	BodyStats, Distance, DistanceUnit, Mass, MassUnit, TimedEntry, TimedEntryData, UnitValue
+} from "./model/Model";
 import { Firestore, collection, doc, getDoc, setDoc } from "firebase/firestore";
-import { User, Timeline, FitnessCalculator, Unit } from "./Model";
 import { Button, FormControl, InputLabel, MenuItem, Select, SelectChangeEvent, TextField } from "@mui/material";
 
 const BODY_STATS_COLLECTION_NAME = "body-stats";
-
 
 export const Home = (props: {
 	firestore: Firestore,
@@ -36,7 +36,9 @@ export const Home = (props: {
 					Sign Out
 				</Button>
 			</div>
-			{bodyStats == undefined && <div className="row spinner-border mx-auto" role="status" />}
+			{bodyStats == undefined && <div className="row mx-auto m-1">
+				<div className="row spinner-border mx-auto" role="status" />
+			</div>}
 			{bodyStats != undefined &&
 				<BodyStatsOverview
 					firestore={props.firestore}
@@ -115,7 +117,7 @@ const BodyStatsOverview = (props: {
 			setWeightUnit={setWeightUnit}
 			setBodyStats={props.setBodyStats} />
 		<HeightView
-		bodyStats={bodyStats}
+			bodyStats={bodyStats}
 			setStatsChanged={setStatsChanged}
 			height={height}
 			setHeight={setHeight}

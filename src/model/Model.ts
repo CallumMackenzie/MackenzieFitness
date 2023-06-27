@@ -1,6 +1,6 @@
 
 import { Auth, User as FirebaseUser } from "firebase/auth";
-import moment, { Moment, MomentInput } from "moment";
+import moment from "moment";
 
 export class User {
 	user: FirebaseUser;

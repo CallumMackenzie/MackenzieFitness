@@ -1,8 +1,7 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import './App.scss';
+import React, { useState } from 'react';
 import { SignIn } from './SignIn';
 import { Home } from './Home'
-import { User } from './Model';
+import { User } from './model/Model';
 
 import { initializeApp } from "firebase/app";
 import { getAnalytics } from "firebase/analytics";
